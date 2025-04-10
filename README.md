@@ -10,6 +10,7 @@
 - **Detailed Logging**: Generate log files capturing the execution status, output, and errors for auditing and debugging purposes.
 - **Flexible Directory Selection**: Automatically detects and processes directories within a specified initial directory, with support for nested directories if needed.
 - **Subdirectories entry points**: Insert subdirectories in relation to the parent, to execute commands in them if the directory exists, if it does not exist there will be no error.
+- **Retry Mechanism**: Automatically retry failed commands a specified number of times, ensuring robustness in execution.
 
 #### Getting Started:
 
@@ -30,7 +31,8 @@
      -dir "/path/to/initial/directory" \
      -commands "git checkout dev; git pull; npm i --force; npm run deploy-dev" \
      -subdirs "functions" \
-     -concurrency 5
+     -concurrency 5 \
+     -retries 0
    ```
 
    **Interactive Mode**:
@@ -57,6 +59,7 @@
 - `-commands`: A semicolon-separated list of commands to execute in each directory.
 - `-concurrency`: The number of directories to process concurrently (default is 10).
 - `-subdirs`: A semicolon-separated list of subdirectories to process in relation to the parent directory.
+- `-retries`: Number of retries for failed commands (default is 0).
 
 #### Logging:
 

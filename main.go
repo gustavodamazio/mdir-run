@@ -15,6 +15,9 @@ import (
 )
 
 func main() {
+	// Record the start time for the overall execution
+	startTime := time.Now()
+	
 	// Parse configuration
 	cfg, err := config.ParseConfig()
 	if err != nil {
@@ -73,4 +76,7 @@ func main() {
 	wg.Wait()
 	close(done)
 	progressManager.PrintAllProgress(writer)
+	
+	// Write the final summary to the log file with execution time
+	logger.WriteSummaryLog(cfg.LogFile, startTime)
 }

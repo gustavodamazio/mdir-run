@@ -15,6 +15,7 @@ type Config struct {
 	Concurrency        int
 	LogFile            string
 	SubDirsEntryPoints []string
+	Retries            int
 }
 
 func ParseConfig() (*Config, error) {
@@ -23,6 +24,7 @@ func ParseConfig() (*Config, error) {
 	dirFlag := flag.String("dir", "", "Directory in which to execute")
 	concurrencyFlag := flag.Int("concurrency", 10, "Number of concurrent operations")
 	subDirsFlag := flag.String("subdirs", "", "Subdirectories entry points to run commands in, separated by semicolons")
+	retriesFlag := flag.Int("retries", 0, "Number of retries for failed commands")
 	flag.Parse()
 
 	reader := bufio.NewReader(os.Stdin)
@@ -57,6 +59,7 @@ func ParseConfig() (*Config, error) {
 		Concurrency:        *concurrencyFlag,
 		LogFile:            logFile,
 		SubDirsEntryPoints: subDirs,
+		Retries:            *retriesFlag,
 	}, nil
 }
 
