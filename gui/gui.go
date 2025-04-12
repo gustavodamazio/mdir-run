@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"image/color"
 	"os"
 	"runtime"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
@@ -51,23 +53,32 @@ func (f *fixedWidthLayout) Layout(objects []fyne.CanvasObject, containerSize fyn
 }
 
 type GUI struct {
-	app            fyne.App
-	window         fyne.Window
-	progressItems  map[string]*widget.Label
-	progressList   *widget.List
-	outputText     *widget.Entry
-	progressData   []string
-	cfg            *config.Config
-	executeButton  *widget.Button
-	logArchivePath string
+	app               fyne.App
+	window            fyne.Window
+	progressItems     map[string]*widget.Label
+	progressList      *widget.List
+	progressData      []string
+	progressColors    map[int]color.Color // Colors for list items
+	cfg               *config.Config
+	executeButton     *widget.Button
+	logArchivePath    string
+	statusLine1       *canvas.Text // First line: "Execution completed"
+	statusLine2       *canvas.Text // Second line: Success/Failure counts
+	statusLine3       *canvas.Text // Third line: Log file path
+	statusColor       color.Color  // Current status color
 }
 
 // LaunchGUI starts the GUI application
 func LaunchGUI() {
 	g := &GUI{
-		app:           initializeApp(),
-		progressItems: make(map[string]*widget.Label),
-		progressData:  []string{},
+		app:            initializeApp(),
+		progressItems:  make(map[string]*widget.Label),
+		progressData:   []string{},
+		progressColors: make(map[int]color.Color),
+		statusLine1:    canvas.NewText("", color.White),    // First line, initialized with white color
+		statusLine2:    canvas.NewText("", color.White),    // Second line, initialized with white color
+		statusLine3:    canvas.NewText("", color.White),    // Third line, initialized with white color 
+		statusColor:    color.White,                        // Default status color
 		cfg: &config.Config{
 			Concurrency:        10,
 			Retries:            2,
@@ -132,24 +143,36 @@ func (g *GUI) buildUI() {
 		// Re-enable button when execution completes (done in startExecution)
 	})
 
-	// Progress list
+	// Progress list with colored items
 	g.progressList = widget.NewList(
 		func() int {
 			return len(g.progressData)
 		},
 		func() fyne.CanvasObject {
-			return widget.NewLabel("Template")
+			// Create a text object that can be colored
+			text := canvas.NewText("Template", color.White)
+			text.TextSize = 14
+			return container.NewCenter(text)
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
 			fyne.Do(func() {
-				obj.(*widget.Label).SetText(g.progressData[id])
+				// Get the text object from the container
+				text := obj.(*fyne.Container).Objects[0].(*canvas.Text)
+				text.Text = g.progressData[id]
+				
+				// Set color if one is assigned
+				if c, ok := g.progressColors[id]; ok {
+					text.Color = c
+				} else {
+					text.Color = color.White
+				}
+				
+				text.Refresh()
 			})
 		},
 	)
 
-	// Output text area
-	g.outputText = widget.NewMultiLineEntry()
-	g.outputText.Disable()
+	// No output text area anymore
 
 	// Create labels with consistent width
 	dirLabel := widget.NewLabel("Directory:")
@@ -175,15 +198,45 @@ func (g *GUI) buildUI() {
 		g.executeButton,
 	)
 
-	// Main split layout
-	split := container.NewHSplit(
-		g.progressList,
-		g.outputText,
+	// Status summary at the bottom - configure each line
+	// First status line - Completion status
+	g.statusLine1.Alignment = fyne.TextAlignCenter
+	g.statusLine1.TextSize = 20
+	g.statusLine1.Text = ""
+	
+	// Second status line - Success/Failure counts
+	g.statusLine2.Alignment = fyne.TextAlignCenter
+	g.statusLine2.TextSize = 18
+	g.statusLine2.Text = ""
+	
+	// Third status line - Log file path
+	g.statusLine3.Alignment = fyne.TextAlignCenter
+	g.statusLine3.TextSize = 16
+	g.statusLine3.Text = ""
+	
+	// Create horizontal scrollers for each line
+	statusScroller1 := container.NewHScroll(g.statusLine1)
+	statusScroller2 := container.NewHScroll(g.statusLine2)
+	statusScroller3 := container.NewHScroll(g.statusLine3)
+	
+	// Create a padded container with more space for all three lines
+	statusContainer := container.NewPadded(
+		container.NewVBox(
+			widget.NewSeparator(),
+			container.NewPadded(statusScroller1),
+			container.NewPadded(statusScroller2),
+			container.NewPadded(statusScroller3),
+		),
 	)
-	split.SetOffset(0.3) // 30% for progress list, 70% for output
 
-	// Main layout
-	content := container.NewBorder(form, nil, nil, nil, split)
+	// Main layout with status summary at the bottom
+	content := container.NewBorder(
+		form,
+		statusContainer, // Status at the bottom
+		nil,
+		nil,
+		g.progressList, // Progress list takes the full center area
+	)
 	g.window.SetContent(content)
 }
 
@@ -253,23 +306,29 @@ func (g *GUI) executeCommands(dirPath, commandsText, subdirs, concurrency, retri
 		}
 	}
 
-	// Clear progress data
+	// Clear progress data and set default colors
 	g.progressData = []string{}
+	g.progressColors = make(map[int]color.Color)
+	g.statusColor = color.White // Reset status color to white
 	fyne.Do(func() {
 		g.progressList.Refresh()
-		g.outputText.SetText("")
+		// Clear and reset all status lines
+		g.statusLine1.Text = ""
+		g.statusLine1.Color = color.White
+		g.statusLine1.Refresh()
+		g.statusLine2.Text = ""
+		g.statusLine2.Color = color.White
+		g.statusLine2.Refresh()
+		g.statusLine3.Text = ""
+		g.statusLine3.Color = color.White
+		g.statusLine3.Refresh()
 	})
 	g.logArchivePath = ""
 
 	// Start execution in a goroutine
 	go func() {
 		g.startExecution()
-		// Update UI when execution is complete
-		completionMessage := "\n--- Execution completed ---\n"
-		if g.logArchivePath != "" {
-			completionMessage += fmt.Sprintf("Log files archived to: %s\n", g.logArchivePath)
-		}
-		g.updateOutput(completionMessage)
+		// The colored completion status is shown via updateCompletionStatus
 	}()
 }
 
@@ -298,10 +357,11 @@ func (g *GUI) startExecution() {
 		return
 	}
 
-	// Initialize progress data
+	// Initialize progress data with white text
 	g.progressData = make([]string, len(dirs))
 	for i, dir := range dirs {
 		g.progressData[i] = fmt.Sprintf("%s | Waiting...", dir)
+		g.progressColors[i] = color.White // Ensure text starts as white
 	}
 	fyne.Do(func() {
 		g.progressList.Refresh()
@@ -313,15 +373,28 @@ func (g *GUI) startExecution() {
 	// Execute commands
 	executor.ExecuteCommands(dirs, g.cfg, &progressManager.ProgressManager)
 
-	// Prepare updates to status
+	// We don't need to forcibly update statuses at the end because
+	// the progress manager already properly updates the status
+	// via the GUIProgressManager.UpdateProgress method.
+	// Any remaining "Waiting..." statuses indicate directories that weren't processed.
+	
+	// For backward compatibility, update any remaining "Waiting..." entries
 	var updatedIndexes []int
 	var updatedValues []string
 
 	for i, statusText := range g.progressData {
 		if strings.Contains(statusText, "Waiting...") {
 			dirName := strings.Split(statusText, " | ")[0]
+			// Get the real status from progress manager if available
+			progress := progressManager.GetProgress(dirName)
+			
 			updatedIndexes = append(updatedIndexes, i)
-			updatedValues = append(updatedValues, fmt.Sprintf("%s | Completed", dirName))
+			if progress != nil && progress.Status != "Processing" {
+				updatedValues = append(updatedValues, fmt.Sprintf("%s | %s", dirName, progress.Status))
+			} else {
+				// Fallback if no status is available
+				updatedValues = append(updatedValues, fmt.Sprintf("%s | Not processed", dirName))
+			}
 		}
 	}
 
@@ -345,6 +418,9 @@ func (g *GUI) startExecution() {
 	} else {
 		g.logArchivePath = archivePath
 	}
+	
+	// Update completion status with color
+	g.updateCompletionStatus()
 
 	// Re-enable execute button
 	fyne.Do(func() {
@@ -367,14 +443,8 @@ func (g *GUI) updateProgress(dir string, status string) {
 }
 
 func (g *GUI) updateOutput(text string) {
-	// We use the fyne.Do method to ensure that UI updates
-	// happen on Fyne's main thread
-	fyne.Do(func() {
-		currentText := g.outputText.Text
-		g.outputText.SetText(currentText + text)
-		// Auto-scroll to bottom
-		g.outputText.CursorRow = len(strings.Split(g.outputText.Text, "\n")) - 1
-	})
+	// Output is now ignored since we removed the output text area
+	// This method is kept for compatibility with existing code
 }
 
 // Custom progress manager for GUI
@@ -391,6 +461,87 @@ func NewGUIProgressManager(dirs []string, gui *GUI) *GUIProgressManager {
 	return pm
 }
 
+// updateCompletionStatus analyzes all progress items and updates the status summary with appropriate color
+func (g *GUI) updateCompletionStatus() {
+	// Count successes and failures
+	successCount := 0
+	failCount := 0
+	
+	// Define colors
+	successColor := color.RGBA{0, 180, 0, 255}   // Green
+	mixedColor := color.RGBA{255, 140, 0, 255}   // Orange
+	failColor := color.RGBA{220, 20, 20, 255}    // Red
+	
+	// Analyze progress data
+	for i, status := range g.progressData {
+		if strings.Contains(status, "SUCCESS") {
+			successCount++
+			// Color successful items green
+			g.progressColors[i] = successColor
+		} else if strings.Contains(status, "FAIL") {
+			failCount++
+			// Color failed items red
+			g.progressColors[i] = failColor
+		}
+	}
+	
+	// Prepare the three separate status lines
+	line1Text := "--- Execution completed ---"
+	
+	// Line 2: Success/failure stats
+	line2Text := ""
+	totalItems := len(g.progressData)
+	if totalItems > 0 {
+		line2Text = fmt.Sprintf("Success: %d/%d | Failure: %d/%d", 
+			successCount, totalItems, failCount, totalItems)
+	}
+	
+	// Line 3: Log file path
+	line3Text := ""
+	if g.logArchivePath != "" {
+		line3Text = fmt.Sprintf("Log files archived in: %s", g.logArchivePath)
+	}
+	
+	// Determine the appropriate color based on results
+	if failCount == 0 && successCount > 0 {
+		// All succeeded
+		g.statusColor = successColor
+	} else if successCount == 0 && failCount > 0 {
+		// All failed
+		g.statusColor = failColor
+	} else if successCount > 0 && failCount > 0 {
+		// Mixed results
+		g.statusColor = mixedColor
+	} else {
+		// No results or other case
+		g.statusColor = color.White
+	}
+	
+	// Update UI on main thread
+	fyne.Do(func() {
+		// Update all three status lines with the same color
+		g.statusLine1.Text = line1Text
+		g.statusLine1.Color = g.statusColor
+		g.statusLine1.Refresh()
+		
+		g.statusLine2.Text = line2Text
+		g.statusLine2.Color = g.statusColor
+		g.statusLine2.Refresh()
+		
+		g.statusLine3.Text = line3Text
+		g.statusLine3.Color = g.statusColor
+		g.statusLine3.Refresh()
+		
+		// Reset all colors to ensure they display correctly
+		for i := range g.progressData {
+			if _, ok := g.progressColors[i]; !ok {
+				g.progressColors[i] = color.White
+			}
+		}
+		g.progressList.Refresh() // Refresh list to update item colors
+	})
+}
+
 func (pm *GUIProgressManager) UpdateProgress(dir string, progress *progress.Progress) {
 	// Update underlying progress manager
 	pm.ProgressManager.UpdateProgress(dir, progress)
@@ -404,11 +555,11 @@ func (pm *GUIProgressManager) UpdateProgress(dir string, progress *progress.Prog
 			status += progress.Command
 		}
 	} else if progress.Status == "FAIL" || strings.HasPrefix(progress.Status, "FAIL(") {
-		status += fmt.Sprintf("ERROR: %s", progress.Command)
-		pm.gui.updateOutput(fmt.Sprintf("[%s] ERROR: %s\n%s\n", dir, progress.Command, progress.Output))
+		status += fmt.Sprintf("%s: %s", progress.Status, progress.Command)
+		// We no longer need to update the output text
 	} else if progress.Status == "SUCCESS" || strings.HasPrefix(progress.Status, "SUCCESS(") {
-		status += "Completed successfully"
-		pm.gui.updateOutput(fmt.Sprintf("[%s] Completed successfully\n", dir))
+		status += fmt.Sprintf("%s", progress.Status)
+		// We no longer need to update the output text
 	} else {
 		status += progress.Status
 	}
