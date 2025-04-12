@@ -79,4 +79,9 @@ func main() {
 	
 	// Write the final summary to the log file with execution time
 	logger.WriteSummaryLog(cfg.LogFile, startTime)
+	
+	// Archive log files and remove originals
+	if err := logger.ArchiveLogs(cfg.LogFile); err != nil {
+		log.Printf("WARNING: Failed to archive log files: %v", err)
+	}
 }
