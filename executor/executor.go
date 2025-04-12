@@ -34,6 +34,27 @@ func executeWithRetry(cmd *exec.Cmd, stdoutBuf, stderrBuf *bytes.Buffer, retries
 	return retries + 1, err // Return the last attempt number and last error
 }
 
+// ExecuteCommands executes commands in multiple directories concurrently
+// This is used by the GUI mode
+func ExecuteCommands(dirs []string, cfg *config.Config, progressManager *progress.ProgressManager) {
+	// Limit concurrency
+	semaphore := make(chan struct{}, cfg.Concurrency)
+	
+	// Process directories
+	for _, dir := range dirs {
+		semaphore <- struct{}{}
+		go func(dir string) {
+			defer func() { <-semaphore }()
+			ProcessRepo(dir, cfg, progressManager)
+		}(dir)
+	}
+	
+	// Wait for all goroutines to finish
+	for i := 0; i < cfg.Concurrency; i++ {
+		semaphore <- struct{}{}
+	}
+}
+
 func ProcessRepo(dir string, cfg *config.Config, progressManager *progress.ProgressManager) {
 	progress := progressManager.GetProgress(dir)
 	startTime := time.Now()

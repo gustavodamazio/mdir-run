@@ -1,12 +1,13 @@
 # mdir-run
 
-A powerful Go-based command-line tool designed to execute a series of commands across multiple directories concurrently. It streamlines batch operations by automating tasks such as code updates, deployments, and maintenance across numerous projects.
+A powerful Go-based tool designed to execute a series of commands across multiple directories concurrently. It streamlines batch operations by automating tasks such as code updates, deployments, and maintenance across numerous projects. Available in both command-line and graphical interface modes.
 
 ## Key Features
 
 - **Concurrent Execution**: Run commands in multiple directories with configurable concurrency levels to optimize performance.
+- **Multiple Interfaces**: Use either command-line or graphical user interface.
 - **Interactive and Non-Interactive Modes**: Provide inputs via command-line flags or interactively through prompts.
-- **Real-Time Progress Tracking**: Monitor the execution status of commands in each directory with live updates in the terminal.
+- **Real-Time Progress Tracking**: Monitor the execution status of commands in each directory with live updates.
 - **Comprehensive Logging System**: 
   - Generates a main `script.log` file with execution status for all operations
   - Creates individual detailed logs for successes and errors
@@ -23,7 +24,7 @@ go install github.com/gustavodamazio/mdir-run@latest
 
 ## Usage
 
-You can run mdir-run using command-line flags or interactively:
+You can run mdir-run using command-line flags, interactively, or with the GUI:
 
 ### Command-Line Mode
 
@@ -46,10 +47,26 @@ mdir-run
 
 The tool will prompt you for the required inputs.
 
+### GUI Mode
+
+To launch the graphical user interface:
+
+```bash
+mdir-run -gui
+```
+
+The GUI provides access to all the functionality of the command-line version with an intuitive interface:
+- Input fields for all configuration options
+- Directory browser for selecting the target directory
+- Real-time progress monitoring with visual indicators
+- Command output display area
+- Concurrent execution with adjustable parallelism
+
 ## Configuration Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
+| `-gui` | Launch in graphical user interface mode | false |
 | `-dir` | Specifies the initial directory containing subdirectories to process | (Required, prompted if omitted) |
 | `-commands` | Semicolon-separated list of commands to execute in each directory | (Required, prompted if omitted) |
 | `-concurrency` | Number of directories to process concurrently | 10 |
@@ -75,6 +92,14 @@ mdir-run -dir "/path/to/projects" -commands "npm install; npm run build" -subdir
 ```bash
 mdir-run -commands "go test ./..." -retries 2
 ```
+
+### Using the GUI for Complex Tasks
+
+```bash
+mdir-run -gui
+```
+
+Then use the interface to set up complex operations with visual feedback.
 
 ## Logging System
 

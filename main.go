@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"sync"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/gustavodamazio/mdir-run/config"
 	"github.com/gustavodamazio/mdir-run/directories"
 	"github.com/gustavodamazio/mdir-run/executor"
+	"github.com/gustavodamazio/mdir-run/gui"
 	"github.com/gustavodamazio/mdir-run/logger"
 	"github.com/gustavodamazio/mdir-run/progress"
 
@@ -15,6 +17,32 @@ import (
 )
 
 func main() {
+	// Add a flag to enable GUI mode 
+	guiFlag := flag.Bool("gui", true, "Enable GUI mode (default: true, use -gui=false for CLI mode)")
+	cliFlag := flag.Bool("cli", false, "Force CLI mode instead of GUI mode")
+	
+	// Now parse all flags
+	flag.Parse()
+	
+	// Check if any CLI-specific flags were provided
+	hasCLIFlags := *cliFlag || 
+		*config.DirFlag != "" || 
+		*config.CommandsFlag != "" || 
+		*config.SubDirsFlag != "" || 
+		*config.ConcurrencyFlag != 10 ||  // 10 is the default
+		*config.RetriesFlag != 0       // 0 is the default
+	
+	// If CLI flags were provided or CLI mode is explicitly requested, use CLI mode
+	if hasCLIFlags || !(*guiFlag) {
+		runCLIMode()
+		return
+	}
+	
+	// If no CLI flags were provided and GUI is not disabled, launch the GUI
+	gui.LaunchGUI()
+}
+
+func runCLIMode() {
 	// Record the start time for the overall execution
 	startTime := time.Now()
 	
@@ -81,7 +109,7 @@ func main() {
 	logger.WriteSummaryLog(cfg.LogFile, startTime)
 	
 	// Archive log files and remove originals
-	if err := logger.ArchiveLogs(cfg.LogFile); err != nil {
+	if _, err := logger.ArchiveLogs(cfg.LogFile); err != nil {
 		log.Printf("WARNING: Failed to archive log files: %v", err)
 	}
 }

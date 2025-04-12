@@ -18,25 +18,28 @@ type Config struct {
 	Retries            int
 }
 
+// Command line flags
+var (
+	CommandsFlag    = flag.String("commands", "", "Commands to execute, separated by semicolons")
+	DirFlag         = flag.String("dir", "", "Directory in which to execute")
+	ConcurrencyFlag = flag.Int("concurrency", 10, "Number of concurrent operations")
+	SubDirsFlag     = flag.String("subdirs", "", "Subdirectories entry points to run commands in, separated by semicolons")
+	RetriesFlag     = flag.Int("retries", 0, "Number of retries for failed commands")
+)
+
 func ParseConfig() (*Config, error) {
-	// Define flags
-	commandsFlag := flag.String("commands", "", "Commands to execute, separated by semicolons")
-	dirFlag := flag.String("dir", "", "Directory in which to execute")
-	concurrencyFlag := flag.Int("concurrency", 10, "Number of concurrent operations")
-	subDirsFlag := flag.String("subdirs", "", "Subdirectories entry points to run commands in, separated by semicolons")
-	retriesFlag := flag.Int("retries", 0, "Number of retries for failed commands")
-	flag.Parse()
+	// No need to parse flags here now, main.go handles that
 
 	reader := bufio.NewReader(os.Stdin)
 
 	// Abstracted input parsing
-	initialDir := getInput("Enter the directory in which to execute: ", dirFlag, reader)
-	commandsInput := getInput("Enter the commands to execute, separated by semicolons: ", commandsFlag, reader)
+	initialDir := getInput("Enter the directory in which to execute: ", DirFlag, reader)
+	commandsInput := getInput("Enter the commands to execute, separated by semicolons: ", CommandsFlag, reader)
 
 	// Process subdirectories
 	subDirs := []string{}
-	if *subDirsFlag != "" {
-		for _, subDir := range strings.Split(*subDirsFlag, ";") {
+	if *SubDirsFlag != "" {
+		for _, subDir := range strings.Split(*SubDirsFlag, ";") {
 			subDirs = append(subDirs, strings.TrimSpace(subDir))
 		}
 	}
@@ -46,6 +49,9 @@ func ParseConfig() (*Config, error) {
 	var commands [][]string
 	for _, cmd := range commandsStrings {
 		cmd = strings.TrimSpace(cmd)
+		if cmd == "" {
+			continue
+		}
 		cmdArgs := strings.Fields(cmd)
 		commands = append(commands, cmdArgs)
 	}
@@ -56,10 +62,10 @@ func ParseConfig() (*Config, error) {
 	return &Config{
 		InitialDir:         initialDir,
 		Commands:           commands,
-		Concurrency:        *concurrencyFlag,
+		Concurrency:        *ConcurrencyFlag,
 		LogFile:            logFile,
 		SubDirsEntryPoints: subDirs,
-		Retries:            *retriesFlag,
+		Retries:            *RetriesFlag,
 	}, nil
 }
 

@@ -140,7 +140,8 @@ func WriteSummaryLog(logFile string, startTime time.Time) {
 }
 
 // ArchiveLogs archives all log files into a compressed archive and removes the original files
-func ArchiveLogs(logFile string) error {
+// Returns the archive path and any error
+func ArchiveLogs(logFile string) (string, error) {
 	logMutex.Lock()
 	defer logMutex.Unlock()
 
@@ -171,7 +172,7 @@ func ArchiveLogs(logFile string) error {
 	// Find all success and error log files in the same directory
 	entries, err := os.ReadDir(logDir)
 	if err != nil {
-		return fmt.Errorf("failed to read log directory: %w", err)
+		return "", fmt.Errorf("failed to read log directory: %w", err)
 	}
 	
 	for _, entry := range entries {
@@ -187,7 +188,7 @@ func ArchiveLogs(logFile string) error {
 	
 	// If no log files found, return
 	if len(logFiles) == 0 {
-		return fmt.Errorf("no log files found to archive")
+		return "", fmt.Errorf("no log files found to archive")
 	}
 	
 	// Create archive based on OS
@@ -199,7 +200,7 @@ func ArchiveLogs(logFile string) error {
 	}
 	
 	if archiveErr != nil {
-		return fmt.Errorf("failed to create archive: %w", archiveErr)
+		return "", fmt.Errorf("failed to create archive: %w", archiveErr)
 	}
 	
 	// Delete the original log files
@@ -210,7 +211,7 @@ func ArchiveLogs(logFile string) error {
 	}
 	
 	fmt.Printf("Log files archived to %s\n", archivePath)
-	return nil
+	return archivePath, nil
 }
 
 // createZipArchive creates a zip archive containing the specified files
