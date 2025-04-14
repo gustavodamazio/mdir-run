@@ -14,13 +14,19 @@ import (
 	"github.com/gustavodamazio/mdir-run/progress"
 )
 
-func executeWithRetry(cmd *exec.Cmd, stdoutBuf, stderrBuf *bytes.Buffer, retries int) (int, error) {
+// executeWithRetryFunc recreates the command for each retry attempt to avoid "exec: already started" error
+func executeWithRetryFunc(cmdFunc func() *exec.Cmd, stdoutBuf, stderrBuf *bytes.Buffer, retries int) (int, error) {
 	var err error
 	for attempt := 0; attempt <= retries; attempt++ {
 		// Reset buffers before each attempt
 		stdoutBuf.Reset()
 		stderrBuf.Reset()
 
+		// Create a new command instance for each attempt
+		cmd := cmdFunc()
+		cmd.Stdout = stdoutBuf
+		cmd.Stderr = stderrBuf
+		
 		err = cmd.Run()
 		if err == nil {
 			return attempt + 1, nil // Command succeeded, return attempt number (1-indexed)
@@ -106,10 +112,14 @@ func ProcessRepo(dir string, cfg *config.Config, progressManager *progress.Progr
 
 		// Capture the output
 		var stdoutBuf, stderrBuf bytes.Buffer
-		cmd.Stdout = &stdoutBuf
-		cmd.Stderr = &stderrBuf
+		// Create a function that returns a new command instance for each retry
+		cmdFunc := func() *exec.Cmd {
+			newCmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+			newCmd.Dir = dirPath
+			return newCmd
+		}
 
-		attemptNumber, err := executeWithRetry(cmd, &stdoutBuf, &stderrBuf, cfg.Retries)
+		attemptNumber, err := executeWithRetryFunc(cmdFunc, &stdoutBuf, &stderrBuf, cfg.Retries)
 		if err != nil {
 			progress.Status = fmt.Sprintf("FAIL(%d/%d)", attemptNumber, cfg.Retries+1)
 			errorOutput := stderrBuf.String()
