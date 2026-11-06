@@ -1,9 +1,10 @@
 package gui
 
 import (
+	"errors"
 	"fmt"
 	"image/color"
-	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/ncruces/zenity"
 
 	"github.com/gustavodamazio/mdir-run/config"
 	"github.com/gustavodamazio/mdir-run/directories"
@@ -103,19 +105,61 @@ func isRunningOnMacOS() bool {
 	return runtime.GOOS == "darwin"
 }
 
+// selectFolderNative opens the operating system's folder picker.
+// Returns zenity.ErrCanceled if the user cancels, or another error if no
+// native picker is available (e.g. Linux without zenity/kdialog installed).
+func selectFolderNative(startDir string) (string, error) {
+	if !zenity.IsAvailable() {
+		return "", errors.New("native folder picker not available")
+	}
+	opts := []zenity.Option{zenity.Title("Select directory"), zenity.Directory()}
+	if startDir != "" {
+		opts = append(opts, zenity.Filename(startDir))
+	}
+	path, err := zenity.SelectFile(opts...)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(path), nil
+}
+
+// showFyneFolderDialog is the fallback picker drawn by Fyne itself.
+func (g *GUI) showFyneFolderDialog(dirEntry *widget.Entry) {
+	dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
+		if err != nil || uri == nil {
+			return
+		}
+		dirEntry.SetText(filepath.Clean(filepath.FromSlash(uri.Path())))
+	}, g.window)
+}
+
 func (g *GUI) buildUI() {
 	// Directory input field
 	dirEntry := widget.NewEntry()
 	dirEntry.SetPlaceHolder("Directory path...")
 
-	// Browse button
-	browseButton := widget.NewButtonWithIcon("Browse", theme.FolderOpenIcon(), func() {
-		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
-			if err != nil || uri == nil {
-				return
-			}
-			dirEntry.SetText(uri.Path())
-		}, g.window)
+	// Browse button: uses the OS-native folder picker (Explorer/Finder/zenity),
+	// falling back to Fyne's built-in dialog when no native picker is available.
+	var browseButton *widget.Button
+	browseButton = widget.NewButtonWithIcon("Browse", theme.FolderOpenIcon(), func() {
+		browseButton.Disable()
+		startDir := strings.TrimSpace(dirEntry.Text)
+
+		// The native dialog blocks, so run it off the UI thread.
+		go func() {
+			path, err := selectFolderNative(startDir)
+			fyne.Do(func() {
+				browseButton.Enable()
+				switch {
+				case err == nil:
+					dirEntry.SetText(path)
+				case errors.Is(err, zenity.ErrCanceled):
+					// User closed the dialog; keep the current value.
+				default:
+					g.showFyneFolderDialog(dirEntry)
+				}
+			})
+		}()
 	})
 
 	// Commands input field
@@ -263,17 +307,16 @@ func (g *GUI) executeCommands(dirPath, commandsText, subdirs, concurrency, retri
 	// Process commands from GUI (convert newlines to semicolons)
 	commandsStr := strings.ReplaceAll(commandsText, "\n", ";")
 
-	// Convert directory to absolute path if needed
-	if !strings.HasPrefix(dirPath, "/") {
-		currentDir, err := os.Getwd()
-		if err == nil {
-			dirPath = currentDir + "/" + dirPath
-		}
+	// Convert directory to an absolute, OS-native path.
+	// filepath handles Windows drive letters (C:\...) and separators correctly.
+	dirPath = strings.TrimSpace(dirPath)
+	if absPath, err := filepath.Abs(dirPath); err == nil {
+		dirPath = absPath
 	}
 
 	// Setup config
 	g.cfg.InitialDir = dirPath
-	g.cfg.LogFile = dirPath + "/script.log"
+	g.cfg.LogFile = filepath.Join(dirPath, "script.log")
 
 	// Process concurrency
 	if concurrency != "" {
@@ -443,8 +486,11 @@ func (g *GUI) updateProgress(dir string, status string) {
 }
 
 func (g *GUI) updateOutput(text string) {
-	// Output is now ignored since we removed the output text area
-	// This method is kept for compatibility with existing code
+	// There is no output text area anymore, so surface these messages
+	// (errors/warnings) in a dialog instead of silently dropping them.
+	fyne.Do(func() {
+		dialog.ShowError(fmt.Errorf("%s", strings.TrimSpace(text)), g.window)
+	})
 }
 
 // Custom progress manager for GUI
