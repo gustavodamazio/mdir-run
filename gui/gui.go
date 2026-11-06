@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/ncruces/zenity"
@@ -23,6 +24,7 @@ import (
 	"github.com/gustavodamazio/mdir-run/executor"
 	"github.com/gustavodamazio/mdir-run/logger"
 	"github.com/gustavodamazio/mdir-run/progress"
+	"github.com/gustavodamazio/mdir-run/version"
 )
 
 // Custom layout to enforce a fixed width
@@ -88,7 +90,7 @@ func LaunchGUI() {
 		},
 	}
 
-	g.window = g.app.NewWindow("mdir-run")
+	g.window = g.app.NewWindow("mdir-run " + version.Get())
 	g.window.Resize(fyne.NewSize(800, 600))
 	g.buildUI()
 	g.window.ShowAndRun()
@@ -273,10 +275,15 @@ func (g *GUI) buildUI() {
 		),
 	)
 
+	// Small, discreet version label in the bottom-right corner
+	versionText := canvas.NewText(version.Get(), theme.Color(theme.ColorNamePlaceHolder))
+	versionText.TextSize = theme.CaptionTextSize()
+	versionBar := container.NewHBox(layout.NewSpacer(), versionText)
+
 	// Main layout with status summary at the bottom
 	content := container.NewBorder(
 		form,
-		statusContainer, // Status at the bottom
+		container.NewVBox(statusContainer, versionBar), // Status + version at the bottom
 		nil,
 		nil,
 		g.progressList, // Progress list takes the full center area

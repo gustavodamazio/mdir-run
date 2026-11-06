@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/gustavodamazio/mdir-run/gui"
 	"github.com/gustavodamazio/mdir-run/logger"
 	"github.com/gustavodamazio/mdir-run/progress"
+	"github.com/gustavodamazio/mdir-run/version"
 
 	"github.com/gosuri/uilive"
 )
@@ -20,9 +22,15 @@ func main() {
 	// Add a flag to enable GUI mode 
 	guiFlag := flag.Bool("gui", true, "Enable GUI mode (default: true, use -gui=false for CLI mode)")
 	cliFlag := flag.Bool("cli", false, "Force CLI mode instead of GUI mode")
+	versionFlag := flag.Bool("version", false, "Print the version and exit")
 	
 	// Now parse all flags
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("mdir-run %s\n", version.Get())
+		return
+	}
 	
 	// Check if any CLI-specific flags were provided
 	hasCLIFlags := *cliFlag || 

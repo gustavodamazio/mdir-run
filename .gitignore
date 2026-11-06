@@ -2,3 +2,11 @@ bin/
 dist/
 fyne-cross/
 .DS_Store
+
+# Arquivos temporários criados pelo `fyne package` (fyne-cross) na pasta do código.
+# Precisam ser ignorados para o Go não marcar o build como "+dirty" na versão.
+fyne_metadata_init.go
+fyne.syso
+FyneApp.ico
+*.exe
+*.exe.manifest

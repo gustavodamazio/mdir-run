@@ -7,6 +7,7 @@ APP_ID        ?= com.gustavodamazio.mdir-run
 BIN_DIR       ?= bin
 DIST_DIR      ?= dist
 FYNE_CROSS_DIR ?= fyne-cross
+MODULE        ?= github.com/gustavodamazio/mdir-run
 FYNE_DIST     ?= $(FYNE_CROSS_DIR)/dist
 
 DARWIN_ARCHS  ?= amd64 arm64
@@ -17,6 +18,18 @@ WINDOWS_ARCHS ?= amd64 arm64
 # e usam GOTOOLCHAIN=local. Com "auto", o Go do container baixa a versão exigida
 # pelo go.mod (fica no cache do fyne-cross, então baixa só uma vez).
 FYNE_CROSS_FLAGS ?= -env GOTOOLCHAIN=auto
+
+# Versão gravada no binário (mdir-run -version e canto da GUI).
+# Padrão: tag do git (ex.: v1.3.1, ou v1.3.1-2-gabc123-dirty fora de uma tag).
+# No CI é sobrescrita pela tag que disparou o workflow (env VERSION).
+VERSION     ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# Usado nos builds com `go` (run/build/install/darwin).
+# Nos builds via fyne-cross o -ldflags NÃO é usado: o fyne-cross põe aspas em
+# variáveis com "=" e o -X se perde. Lá a versão vem do carimbo VCS do Go
+# (tag do git), que dá exatamente "vX.Y.Z" num checkout limpo na tag (CI).
+LDFLAGS     := -X=$(MODULE)/version.Version=$(VERSION)
+# Versão numérica x.y.z para os metadados do pacote Fyne (ex.: propriedades do .exe).
+APP_VERSION := $(or $(shell echo '$(VERSION)' | grep -oE '^v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^v//'),0.0.0)
 
 # Flags extras para `make run` / `make run-cli`, ex.: make run-cli ARGS='-dir . -commands "ls"'
 ARGS ?=
@@ -29,7 +42,7 @@ WINDOWS_TARGETS := $(addprefix build-windows-,$(WINDOWS_ARCHS))
 
 .PHONY: help run run-cli build-local build build-darwin build-linux build-windows \
 	$(DARWIN_TARGETS) $(LINUX_TARGETS) $(WINDOWS_TARGETS) \
-	package release install deps tidy fmt vet test check clean
+	package release install deps tidy fmt vet test check clean version
 
 help: ## Lista os alvos disponíveis
 	@echo "Uso: make <alvo> [VAR=valor]"
@@ -43,11 +56,14 @@ help: ## Lista os alvos disponíveis
 
 ## ---------- Desenvolvimento ----------
 
+version: ## Mostra a versão que será gravada no build
+	@echo "VERSION=$(VERSION)  APP_VERSION=$(APP_VERSION)"
+
 run: ## Executa o app em modo GUI (go run .)
-	go run . $(ARGS)
+	go run -ldflags "$(LDFLAGS)" . $(ARGS)
 
 run-cli: ## Executa o app em modo CLI (go run . -cli)
-	go run . -cli $(ARGS)
+	go run -ldflags "$(LDFLAGS)" . -cli $(ARGS)
 
 deps: ## Baixa as dependências (go mod download)
 	go mod download
@@ -67,13 +83,13 @@ test: ## Roda os testes (go test)
 check: fmt vet test ## fmt + vet + test
 
 install: ## Instala o binário no GOPATH/bin (go install)
-	go install .
+	go install -ldflags "$(LDFLAGS)" .
 
 ## ---------- Build ----------
 
 build-local: ## Compila para a máquina atual em bin/mdir-run
 	@mkdir -p $(BIN_DIR)
-	go build -o $(BIN_DIR)/$(APP) .
+	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP) .
 
 build: build-darwin build-linux build-windows ## Compila para todas as plataformas (equivale ao build.sh)
 	@echo ""
@@ -89,11 +105,11 @@ build-windows: $(WINDOWS_TARGETS) ## Compila para Windows via fyne-cross (amd64 
 $(DARWIN_TARGETS): build-darwin-%:
 	@mkdir -p $(BIN_DIR)
 	@echo "==== Compilando darwin/$* ===="
-	CGO_ENABLED=1 GOOS=darwin GOARCH=$* go build -o $(BIN_DIR)/$(APP)-darwin-$* .
+	CGO_ENABLED=1 GOOS=darwin GOARCH=$* go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(APP)-darwin-$* .
 
 $(LINUX_TARGETS): build-linux-%:
 	@echo "==== Compilando linux/$* via fyne-cross ===="
-	fyne-cross linux -arch=$* -app-id $(APP_ID) $(FYNE_CROSS_FLAGS)
+	fyne-cross linux -arch=$* -name $(APP) -app-id $(APP_ID) -app-version $(APP_VERSION) $(FYNE_CROSS_FLAGS)
 	@set -e; \
 	src="$(FYNE_DIST)/linux-$*/$(APP).tar.xz"; \
 	if [ ! -f "$$src" ]; then echo "❌ Erro: $$src não encontrado"; exit 1; fi; \
@@ -106,7 +122,7 @@ $(LINUX_TARGETS): build-linux-%:
 
 $(WINDOWS_TARGETS): build-windows-%:
 	@echo "==== Compilando windows/$* via fyne-cross ===="
-	fyne-cross windows -arch=$* -app-id $(APP_ID) $(FYNE_CROSS_FLAGS)
+	fyne-cross windows -arch=$* -name $(APP).exe -app-id $(APP_ID) -app-version $(APP_VERSION) $(FYNE_CROSS_FLAGS)
 	@set -e; \
 	src="$(FYNE_DIST)/windows-$*/$(APP).exe.zip"; \
 	if [ ! -f "$$src" ]; then echo "❌ Erro: $$src não encontrado"; exit 1; fi; \
