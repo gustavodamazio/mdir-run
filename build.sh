@@ -32,14 +32,14 @@ done
 # 2. Build for Linux using fyne-cross
 echo ""
 echo "==== Building for Linux using fyne-cross... ===="
-fyne-cross linux -arch=amd64 -app-id github.com/gustavodamazio/mdir-run
-fyne-cross linux -arch=arm64 -app-id github.com/gustavodamazio/mdir-run
+fyne-cross linux -arch=amd64 -app-id com.gustavodamazio.mdir-run -env GOTOOLCHAIN=auto
+fyne-cross linux -arch=arm64 -app-id com.gustavodamazio.mdir-run -env GOTOOLCHAIN=auto
 
 # 3. Build for Windows using fyne-cross
 echo ""
 echo "==== Building for Windows using fyne-cross... ===="
-fyne-cross windows -arch=amd64 -app-id github.com/gustavodamazio/mdir-run
-fyne-cross windows -arch=arm64 -app-id github.com/gustavodamazio/mdir-run
+fyne-cross windows -arch=amd64 -app-id com.gustavodamazio.mdir-run -env GOTOOLCHAIN=auto
+fyne-cross windows -arch=arm64 -app-id com.gustavodamazio.mdir-run -env GOTOOLCHAIN=auto
 
 # 4. Copy files from fyne-cross to bin folder
 echo ""
